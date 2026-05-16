@@ -558,7 +558,7 @@ const getImportanceColor = (importance) => {
   const colorMap = {
     '1': '#28a745',
     '2': '#fd7e14',
-    '3': '#ffc107',
+    '3': '#333',
     '4': '#6f42c1',
     '5': '#dc3545'
   };
