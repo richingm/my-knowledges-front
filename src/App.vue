@@ -35,9 +35,59 @@ const editorConfig = {
   autoFocus: true,
   MENU_CONF: {
     uploadImage: {
-      server: '/api/v1/upload/image',
-      fieldName: 'image',
-      maxFileSize: 5 * 1024 * 1024
+      server: '/api/v1/files/upload',
+      fieldName: 'file',
+      maxFileSize: 5 * 1024 * 1024,
+      maxNumberOfFiles: 5,
+      allowedFileTypes: ['image/*'],
+      timeout: 10 * 1000,
+
+      async customUpload(file, insertFn) {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        try {
+          const res = await fetch('/api/v1/files/upload', {
+            method: 'POST',
+            body: formData,
+            timeout: 10000
+          })
+
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`)
+          }
+
+          const result = await res.json()
+          console.log('upload result:', result)
+
+          if (result && result.Url) {
+            insertFn(result.Url)
+            showNotification('图片上传成功!', 'success')
+          } else if (result && result.url) {
+            insertFn(result.url)
+            showNotification('图片上传成功!', 'success')
+          } else {
+            throw new Error('上传接口返回格式不正确')
+          }
+        } catch (err) {
+          console.error('图片上传失败:', err)
+          showNotification(`图片上传失败: ${err.message}`, 'error')
+        }
+      },
+
+      onSuccess(file, res) {
+        console.log('upload success', res)
+      },
+
+      onFailed(file, res) {
+        console.error('upload failed', res)
+        showNotification('图片上传失败!', 'error')
+      },
+
+      onError(file, err) {
+        console.error('upload error:', err)
+        showNotification(`图片上传错误: ${err.message}`, 'error')
+      }
     }
   }
 };
@@ -238,15 +288,13 @@ const fetchArticle = async (articleId) => {
     const result = await articleService.getArticle(articleId);
     console.log('Article API response:', result);
     if (result) {
-      const importance = result.importance || result.Importance;
-      const level = result.level || result.Level;
-      const mappedImportance = importance || (level ? `${level}` : '3');
+      const level = result.level || result.Level || result.importance || result.Importance || '3';
       
       const article = {
         id: result.id || result.ID || result.Id,
         title: result.title || result.Title || result.name || result.Name || '无标题',
         content: result.content || result.Content || result.body || result.Body || result.html || '',
-        importance: mappedImportance
+        level: `${level}`
       };
       console.log('Mapped article:', article);
       articleDetail.value = article;
@@ -413,7 +461,7 @@ const handleCreateArticle = async (parentArticleId = null) => {
           id: result.id,
           title: '',
           content: '',
-          level: 3,
+          level: '3'
         };
         editableArticle.value = { ...articleDetail.value };
         mode.value = 'edit';
@@ -706,10 +754,10 @@ onUnmounted(() => {
               <div class="article-meta">
                 <div class="importance-selector">
                   <span class="importance-label">重要程度:</span>
-                  <div v-if="mode === 'view'" class="importance-badge" :style="{ backgroundColor: getImportanceColor(articleDetail.importance) }">
+                  <div v-if="mode === 'view'" class="importance-badge" :style="{ backgroundColor: getImportanceColor(articleDetail.level) }">
                     {{ getImportanceText(articleDetail.level) }}
                   </div>
-                  <select v-else v-model="editableArticle.importance" class="importance-select">
+                  <select v-else v-model="editableArticle.level" class="importance-select">
                     <option value="1">非常重要</option>
                     <option value="2">比较重要</option>
                     <option value="3">一般</option>
@@ -782,13 +830,13 @@ onUnmounted(() => {
     </div>
     
     <div v-if="previewImage.show" class="image-preview-overlay" @click="closeImagePreview">
+      <button class="close-btn" @click="closeImagePreview">&times;</button>
+      <div class="image-controls">
+        <button @click.stop="zoomImage(-0.1)" class="zoom-btn">-</button>
+        <span class="zoom-level">{{ Math.round(previewImage.scale * 100) }}%</span>
+        <button @click.stop="zoomImage(0.1)" class="zoom-btn">+</button>
+      </div>
       <div class="image-preview-container" @click.stop>
-        <button class="close-btn" @click="closeImagePreview">&times;</button>
-        <div class="image-controls">
-          <button @click="zoomImage(-0.1)" class="zoom-btn">-</button>
-          <span class="zoom-level">{{ Math.round(previewImage.scale * 100) }}%</span>
-          <button @click="zoomImage(0.1)" class="zoom-btn">+</button>
-        </div>
         <img 
           :src="previewImage.src" 
           alt="预览图片" 
@@ -1347,18 +1395,17 @@ body {
 }
 
 .image-preview-container {
-  position: relative;
   max-width: 90%;
   max-height: 90%;
   cursor: default;
 }
 
 .close-btn {
-  position: absolute;
-  top: -40px;
-  right: 0;
-  width: 30px;
-  height: 30px;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
   border: none;
   border-radius: 50%;
   background-color: rgba(255, 255, 255, 0.2);
@@ -1375,16 +1422,16 @@ body {
 }
 
 .image-controls {
-  position: absolute;
-  bottom: -40px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
+  top: 25px;
+  right: 70px;
   display: flex;
   align-items: center;
   gap: 1rem;
   background-color: rgba(255, 255, 255, 0.2);
   padding: 0.5rem 1rem;
   border-radius: 4px;
+  z-index: 1001;
 }
 
 .zoom-btn {

@@ -96,7 +96,7 @@ const handleNodeClick = (node) => {
           <span class="node-toggle" v-if="hasChildren(node)">
             {{ isExpanded(node.id) ? '▼' : '►' }}
           </span>
-          <span class="node-name" :class="`level-${node.importance || (typeof node.level === 'number' ? `level-${node.level}` : node.level)}`" @click.stop="handleNodeClick(node)">{{ node.title }}</span>
+          <span class="node-name" :class="`level-${node.level || node.importance || '3'}`" @click.stop="handleNodeClick(node)">{{ node.title }}</span>
           <div class="node-actions">
             <button class="action-btn create-btn" @click.stop="emit('create-child', node.id)" title="新建子文章">+</button>
             <button class="action-btn move-btn" @click.stop="emit('move-node', node.id)" title="移动文章">↕</button>
@@ -186,7 +186,7 @@ const handleNodeClick = (node) => {
 }
 
 .node-name.level-3 {
-  color: #ffc107;
+  color: #333;
 }
 
 .node-name.level-2 {
