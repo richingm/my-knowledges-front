@@ -95,14 +95,6 @@ const generateKnowledgeOptions = (nodes, level = 0) => {
   return options;
 };
 
-const handleMoveKnowledge = (knowledgeId) => {
-  const knowledgeOptions = generateKnowledgeOptions(knowledgeTree.value);
-  const confirmed = confirm('确定移动此知识库吗？');
-  if (confirmed) {
-    moveKnowledge(knowledgeId, 0);
-  }
-};
-
 const moveArticle = async (articleId, newParentId) => {
   const result = await articleService.moveArticle(articleId, newParentId, selectedKnowledge.value?.id);
   if (result && result.success) {
@@ -115,11 +107,93 @@ const moveArticle = async (articleId, newParentId) => {
   }
 };
 
+const showMoveModal = ref(false);
+const moveTargetId = ref(null);
+const moveTargetParentId = ref(0);
+const moveOptions = ref([]);
+const moveType = ref('article'); // 'article' or 'knowledge'
+
 const handleMoveArticle = (articleId) => {
-  const confirmed = confirm('确定移动此文章到根目录吗？');
-  if (confirmed) {
-    moveArticle(articleId, 0);
+  const tree = articleTree.value;
+  if (!tree || tree.length === 0) {
+    showNotification('没有可选择的目标位置!', 'error');
+    return;
   }
+  
+  moveTargetId.value = articleId;
+  moveTargetParentId.value = 0;
+  moveType.value = 'article';
+  moveOptions.value = buildMoveOptions(tree, 0, articleId, 'article');
+  
+  if (moveOptions.value.length === 0) {
+    showNotification('没有可选择的目标位置!', 'error');
+    return;
+  }
+  
+  showMoveModal.value = true;
+};
+
+const handleMoveKnowledge = (knowledgeId) => {
+  const tree = knowledgeTree.value;
+  if (!tree || tree.length === 0) {
+    showNotification('没有可选择的目标位置!', 'error');
+    return;
+  }
+  
+  moveTargetId.value = knowledgeId;
+  moveTargetParentId.value = 0;
+  moveType.value = 'knowledge';
+  moveOptions.value = buildMoveOptions(tree, 0, knowledgeId, 'knowledge');
+  
+  if (moveOptions.value.length === 0) {
+    showNotification('没有可选择的目标位置!', 'error');
+    return;
+  }
+  
+  showMoveModal.value = true;
+};
+
+const confirmMove = () => {
+  if (moveTargetId.value !== null) {
+    if (moveType.value === 'article') {
+      moveArticle(moveTargetId.value, moveTargetParentId.value);
+    } else {
+      moveKnowledge(moveTargetId.value, moveTargetParentId.value);
+    }
+    showMoveModal.value = false;
+    moveTargetId.value = null;
+    moveTargetParentId.value = 0;
+    moveType.value = 'article';
+  }
+};
+
+const cancelMove = () => {
+  showMoveModal.value = false;
+  moveTargetId.value = null;
+  moveTargetParentId.value = 0;
+  moveType.value = 'article';
+};
+
+const buildMoveOptions = (nodes, parentId, excludeId, type = 'article', prefix = '') => {
+  const options = [];
+  
+  if (parentId === 0) {
+    options.push({ label: '根目录', parentId: 0 });
+  }
+  
+  nodes.forEach(node => {
+    if (node.id === excludeId) return;
+    
+    const label = `${prefix}${type === 'article' ? (node.title || '未命名文章') : (node.name || '未命名知识库')}`;
+    options.push({ label, parentId: node.id });
+    
+    if (node.children && node.children.length > 0) {
+      const childOptions = buildMoveOptions(node.children, node.id, excludeId, type, prefix + '  ├─ ');
+      options.push(...childOptions);
+    }
+  });
+  
+  return options;
 };
 
 const fetchDomains = async () => {
@@ -375,13 +449,17 @@ const handleUpdateArticle = async () => {
     const editor = editorRef.value;
     const content = editor ? editor.getHtml() : editableArticle.value.content;
     
+    const level = typeof editableArticle.value.level === 'number' 
+      ? editableArticle.value.level 
+      : parseInt((editableArticle.value.level || '3').toString().replace('level-', '')) || 3;
+    
     const result = await articleService.updateArticle(
       editableArticle.value.id,
       {
         knowledge_id: selectedKnowledge.value?.id,
         title: editableArticle.value.title,
         content: content,
-        level: parseInt(editableArticle.value.level?.replace('level-', '') || '3')
+        level: level
       }
     );
     
@@ -684,6 +762,24 @@ onUnmounted(() => {
         />
       </div>
     </main>
+    
+    <div v-if="showMoveModal" class="modal-overlay" @click="cancelMove">
+      <div class="modal-content" @click.stop>
+        <h3>{{ moveType === 'article' ? '移动文章' : '移动知识库' }}</h3>
+        <div class="modal-body">
+          <label>选择目标位置:</label>
+          <select v-model="moveTargetParentId" class="move-select">
+            <option v-for="option in moveOptions" :key="option.parentId" :value="option.parentId">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button @click="cancelMove" class="cancel-btn">取消</button>
+          <button @click="confirmMove" class="confirm-btn">确认移动</button>
+        </div>
+      </div>
+    </div>
     
     <div v-if="previewImage.show" class="image-preview-overlay" @click="closeImagePreview">
       <div class="image-preview-container" @click.stop>
@@ -1136,6 +1232,85 @@ body {
 .editor-wrapper :deep(.w-e-text-container) {
   flex: 1;
   overflow: auto;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 300px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content h3 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+}
+
+.modal-body {
+  margin-bottom: 15px;
+}
+
+.modal-body label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.move-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-footer .cancel-btn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.modal-footer .cancel-btn:hover {
+  background: #f5f5f5;
+}
+
+.modal-footer .confirm-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background: #007bff;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.modal-footer .confirm-btn:hover {
+  background: #0069d9;
 }
 
 .empty-state {
