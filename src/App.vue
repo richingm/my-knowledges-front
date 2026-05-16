@@ -370,15 +370,15 @@ const handleCreateKnowledge = async (parentId = null) => {
   const name = prompt('请输入知识库名称');
   if (!name) return;
   
-  const description = prompt('请输入知识库描述（可选）');
+  const description = '';
   
   try {
-    const result = await knowledgeService.createKnowledge(
-      selectedDomain.value?.id,
-      parentId ? parseInt(parentId) : 0,
-      name,
-      description || ''
-    );
+    const result = await knowledgeService.createKnowledge({
+      domain_id: selectedDomain.value?.id,
+      parent_knowledge_id: parentId ? parseInt(parentId) : 0,
+      name: name,
+      description: description || ''
+    });
     
     if (result) {
       await fetchKnowledgeTree(selectedDomain.value?.id);
