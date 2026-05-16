@@ -166,7 +166,7 @@ const fetchArticle = async (articleId) => {
     if (result) {
       const importance = result.importance || result.Importance;
       const level = result.level || result.Level;
-      const mappedImportance = importance || (level ? `level-${level}` : 'level-3');
+      const mappedImportance = importance || (level ? `${level}` : '3');
       
       const article = {
         id: result.id || result.ID || result.Id,
@@ -317,16 +317,14 @@ const handleCreateArticle = async (parentArticleId = null) => {
     return;
   }
   
-  const title = prompt('请输入文章标题');
-  if (!title) return;
-  
   try {
-    const result = await articleService.createArticle(
-      selectedKnowledge.value.id,
-      title,
-      '',
-      parentArticleId ? parseInt(parentArticleId) : 0
-    );
+    const result = await articleService.createArticle({
+      knowledge_id: selectedKnowledge.value.id,
+      title: '',
+      content: '',
+      parent_article_id: parentArticleId ? parseInt(parentArticleId) : 0,
+      level: 3
+    });
     
     if (result && result.id) {
       await fetchArticleTree(selectedKnowledge.value.id);
@@ -339,9 +337,9 @@ const handleCreateArticle = async (parentArticleId = null) => {
         
         articleDetail.value = {
           id: result.id,
-          title: title,
+          title: '',
           content: '',
-          importance: 'level-3'
+          level: 3,
         };
         editableArticle.value = { ...articleDetail.value };
         mode.value = 'edit';
@@ -374,15 +372,17 @@ const handleUpdateArticle = async () => {
   if (!editableArticle.value) return;
   
   try {
-    const editor = editorRef.value?.getEditor();
+    const editor = editorRef.value;
     const content = editor ? editor.getHtml() : editableArticle.value.content;
     
     const result = await articleService.updateArticle(
       editableArticle.value.id,
-      selectedKnowledge.value?.id,
-      editableArticle.value.title,
-      content,
-      editableArticle.value.importance
+      {
+        knowledge_id: selectedKnowledge.value?.id,
+        title: editableArticle.value.title,
+        content: content,
+        level: parseInt(editableArticle.value.level?.replace('level-', '') || '3')
+      }
     );
     
     if (result) {
@@ -430,22 +430,22 @@ const cancelEdit = () => {
 
 const getImportanceColor = (importance) => {
   const colorMap = {
-    'level-1': '#28a745',
-    'level-2': '#fd7e14',
-    'level-3': '#ffc107',
-    'level-4': '#6f42c1',
-    'level-5': '#dc3545'
+    '1': '#28a745',
+    '2': '#fd7e14',
+    '3': '#ffc107',
+    '4': '#6f42c1',
+    '5': '#dc3545'
   };
   return colorMap[importance] || '#6c757d';
 };
 
 const getImportanceText = (importance) => {
   const textMap = {
-    'level-1': '非常重要',
-    'level-2': '比较重要',
-    'level-3': '一般',
-    'level-4': '不太重要',
-    'level-5': '不重要'
+    '1': '非常重要',
+    '2': '比较重要',
+    '3': '一般',
+    '4': '不太重要',
+    '5': '不重要'
   };
   return textMap[importance] || '未设置';
 };
@@ -629,14 +629,14 @@ onUnmounted(() => {
                 <div class="importance-selector">
                   <span class="importance-label">重要程度:</span>
                   <div v-if="mode === 'view'" class="importance-badge" :style="{ backgroundColor: getImportanceColor(articleDetail.importance) }">
-                    {{ getImportanceText(articleDetail.importance) }}
+                    {{ getImportanceText(articleDetail.level) }}
                   </div>
                   <select v-else v-model="editableArticle.importance" class="importance-select">
-                    <option value="level-1">非常重要</option>
-                    <option value="level-2">比较重要</option>
-                    <option value="level-3">一般</option>
-                    <option value="level-4">不太重要</option>
-                    <option value="level-5">不重要</option>
+                    <option value="1">非常重要</option>
+                    <option value="2">比较重要</option>
+                    <option value="3">一般</option>
+                    <option value="4">不太重要</option>
+                    <option value="5">不重要</option>
                   </select>
                 </div>
                 <div class="article-actions">
