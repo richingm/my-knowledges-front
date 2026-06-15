@@ -1,7 +1,14 @@
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('access_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 export const knowledgeService = {
   async getKnowledgeTree(domainId) {
     try {
-      const response = await fetch(`/api/v1/knowledge-tree?domain_id=${domainId}`);
+      const response = await fetch(`/api/v1/knowledge-tree?domain_id=${domainId}`, {
+        headers: getAuthHeaders()
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch knowledge tree');
       }
@@ -18,7 +25,8 @@ export const knowledgeService = {
       const response = await fetch('/api/v1/knowledges', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify(knowledgeData)
       });
@@ -36,7 +44,8 @@ export const knowledgeService = {
   async deleteKnowledge(knowledgeId) {
     try {
       const response = await fetch(`/api/v1/knowledges/${knowledgeId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
       });
       if (!response.ok) {
         throw new Error('Failed to delete knowledge');
@@ -53,7 +62,8 @@ export const knowledgeService = {
       const response = await fetch(`/api/v1/knowledges/${knowledgeId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify({
           domain_id: domainId,
@@ -77,7 +87,8 @@ export const knowledgeService = {
       const response = await fetch('/api/v1/knowledges/move', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify({
           id: parseInt(knowledgeId),

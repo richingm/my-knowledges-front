@@ -9,7 +9,7 @@ import { articleService } from '../services/articleService';
 import { authService } from '../services/authService';
 import KnowledgeTree from './KnowledgeTree.vue';
 import ArticleTree from './ArticleTree.vue';
-import KnowledgeMindMap from './KnowledgeMindMap.vue';
+
 
 const router = useRouter();
 
@@ -34,12 +34,16 @@ const toolbarConfig = {
   ]
 };
 
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('access_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const editorConfig = {
   placeholder: '请输入文章内容...',
   autoFocus: true,
   MENU_CONF: {
     uploadImage: {
-      server: '/api/v1/files/upload',
       fieldName: 'file',
       maxFileSize: 5 * 1024 * 1024,
       maxNumberOfFiles: 5,
@@ -53,6 +57,7 @@ const editorConfig = {
         try {
           const res = await fetch('/api/v1/files/upload', {
             method: 'POST',
+            headers: getAuthHeaders(),
             body: formData,
             timeout: 10000
           })
@@ -77,20 +82,6 @@ const editorConfig = {
           console.error('图片上传失败:', err)
           showNotification(`图片上传失败: ${err.message}`, 'error')
         }
-      },
-
-      onSuccess(file, res) {
-        console.log('upload success', res)
-      },
-
-      onFailed(file, res) {
-        console.error('upload failed', res)
-        showNotification('图片上传失败!', 'error')
-      },
-
-      onError(file, err) {
-        console.error('upload error:', err)
-        showNotification(`图片上传错误: ${err.message}`, 'error')
       }
     }
   }
@@ -469,16 +460,6 @@ const handleArticleClick = async (article) => {
   await fetchArticle(article.id);
 };
 
-const handleMindMapKnowledgeClick = (knowledge) => {
-  handleKnowledgeClick(knowledge);
-  viewMode.value = 'tree';
-};
-
-const handleMindMapArticleClick = (article) => {
-  handleArticleClick(article);
-  viewMode.value = 'tree';
-};
-
 const handleCreateKnowledge = async (parentId = null) => {
   const name = prompt('请输入知识库名称');
   if (!name) return;
@@ -794,14 +775,7 @@ onUnmounted(() => {
         </select>
       </div>
       <div class="header-right">
-        <div class="view-toggle">
-          <button :class="['view-btn', { active: viewMode === 'tree' }]" @click="viewMode = 'tree'">
-            📋 树视图
-          </button>
-          <button :class="['view-btn', { active: viewMode === 'mindmap' }]" @click="viewMode = 'mindmap'">
-            🧠 脑图视图
-          </button>
-        </div>
+        
         <div class="user-info">
           <span class="username">{{ currentUser?.name || currentUser?.email || currentUser?.username }}</span>
           <button class="logout-btn" @click="handleLogout">🚪 退出</button>
@@ -918,17 +892,6 @@ onUnmounted(() => {
             <p>请选择一篇文章查看详情</p>
           </div>
         </div>
-      </div>
-      
-      <div v-if="viewMode === 'mindmap'" class="mindmap-container">
-        <KnowledgeMindMap 
-          :knowledge-tree="knowledgeTree"
-          :article-tree="articleTree"
-          :selected-knowledge="selectedKnowledge"
-          :selected-article="selectedArticle"
-          @knowledge-click="handleMindMapKnowledgeClick"
-          @article-click="handleMindMapArticleClick"
-        />
       </div>
     </main>
     
@@ -1351,11 +1314,6 @@ onUnmounted(() => {
 .empty-icon {
   font-size: 3rem;
   margin-bottom: 1rem;
-}
-
-.mindmap-container {
-  height: 100%;
-  padding: 1rem;
 }
 
 .image-preview-overlay {

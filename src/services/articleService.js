@@ -1,7 +1,14 @@
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('access_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 export const articleService = {
   async getArticleTree(knowledgeId) {
     try {
-      const response = await fetch(`/api/v1/article-tree?knowledge_id=${knowledgeId}`);
+      const response = await fetch(`/api/v1/article-tree?knowledge_id=${knowledgeId}`, {
+        headers: getAuthHeaders()
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch article tree');
       }
@@ -15,7 +22,9 @@ export const articleService = {
   
   async getArticle(articleId) {
     try {
-      const response = await fetch(`/api/v1/articles/${articleId}`);
+      const response = await fetch(`/api/v1/articles/${articleId}`, {
+        headers: getAuthHeaders()
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch article');
       }
@@ -32,7 +41,8 @@ export const articleService = {
       const response = await fetch('/api/v1/articles', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify(articleData)
       });
@@ -52,7 +62,8 @@ export const articleService = {
       const response = await fetch(`/api/v1/articles/${articleId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify(articleData)
       });
@@ -70,7 +81,8 @@ export const articleService = {
   async deleteArticle(articleId) {
     try {
       const response = await fetch(`/api/v1/articles/${articleId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
       });
       if (!response.ok) {
         throw new Error('Failed to delete article');
@@ -87,7 +99,8 @@ export const articleService = {
       const response = await fetch('/api/v1/articles/move', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
         },
         body: JSON.stringify({
           id: parseInt(articleId),

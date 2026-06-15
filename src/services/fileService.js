@@ -1,3 +1,8 @@
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('access_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 // 文件服务
 
 /**
@@ -12,6 +17,7 @@ export const uploadFile = async (file) => {
     
     const response = await fetch('/api/v1/files/upload', {
       method: 'POST',
+      headers: getAuthHeaders(),
       body: formData,
     });
     
@@ -34,7 +40,9 @@ export const uploadFile = async (file) => {
  */
 export const viewFile = async (filename) => {
   try {
-    const response = await fetch(`/api/v1/files/${filename}`);
+    const response = await fetch(`/api/v1/files/${filename}`, {
+      headers: getAuthHeaders()
+    });
     
     if (!response.ok) {
       throw new Error(`查看文件失败: ${response.statusText}`);
@@ -54,7 +62,9 @@ export const viewFile = async (filename) => {
  */
 export const downloadFile = async (filename) => {
   try {
-    const response = await fetch(`/api/v1/files/${filename}/download`);
+    const response = await fetch(`/api/v1/files/${filename}/download`, {
+      headers: getAuthHeaders()
+    });
     
     if (!response.ok) {
       throw new Error(`下载文件失败: ${response.statusText}`);
