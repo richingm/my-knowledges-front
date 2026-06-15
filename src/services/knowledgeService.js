@@ -48,6 +48,30 @@ export const knowledgeService = {
     }
   },
 
+  async updateKnowledge(knowledgeId, domainId, name, description) {
+    try {
+      const response = await fetch(`/api/v1/knowledges/${knowledgeId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          domain_id: domainId,
+          name: name,
+          description: description
+        })
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update knowledge');
+      }
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error updating knowledge:', error);
+      return null;
+    }
+  },
+
   async moveKnowledge(knowledgeId, newParentId, domainId) {
     try {
       const response = await fetch('/api/v1/knowledges/move', {
@@ -57,7 +81,7 @@ export const knowledgeService = {
         },
         body: JSON.stringify({
           id: parseInt(knowledgeId),
-          new_parent_id: newParentId ? parseInt(newParentId) : 0,
+          newParentKnowledgeId: newParentId ? parseInt(newParentId) : 0,
           domain_id: parseInt(domainId)
         })
       });

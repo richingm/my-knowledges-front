@@ -8,12 +8,12 @@
       
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
-          <label for="email">邮箱</label>
+          <label for="username">用户名</label>
           <input 
-            id="email"
-            v-model="email" 
-            type="email" 
-            placeholder="请输入邮箱"
+            id="username"
+            v-model="username" 
+            type="text" 
+            placeholder="请输入用户名"
             class="form-input"
             required
           />
@@ -54,7 +54,7 @@ import { authService } from '../services/authService';
 const router = useRouter();
 const route = useRoute();
 
-const email = ref('');
+const username = ref('');
 const password = ref('');
 const isLoading = ref(false);
 const error = ref('');
@@ -62,15 +62,15 @@ const error = ref('');
 const handleLogin = async () => {
   error.value = '';
   
-  if (!email.value || !password.value) {
-    error.value = '请输入邮箱和密码';
+  if (!username.value || !password.value) {
+    error.value = '请输入用户名和密码';
     return;
   }
   
   isLoading.value = true;
   
   try {
-    const loginResult = await authService.login(email.value, password.value);
+    const loginResult = await authService.login(username.value, password.value);
     const user = loginResult.user || loginResult;
     
     if (user) {

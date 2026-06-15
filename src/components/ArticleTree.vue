@@ -20,8 +20,11 @@ const expandedNodes = ref(new Set());
 const expandSelectedPath = (nodes, targetId) => {
   if (!nodes || nodes.length === 0) return false;
   
+  const targetIntId = parseInt(targetId);
+  
   for (const node of nodes) {
-    if (node.id === targetId) {
+    const nodeIntId = parseInt(node.id);
+    if (nodeIntId === targetIntId || node.id === targetId) {
       return true;
     }
     
@@ -76,6 +79,13 @@ const hasChildren = (node) => {
   return node.children && node.children.length > 0;
 };
 
+const isSelected = (nodeId) => {
+  if (props.selectedId === null || props.selectedId === undefined) return false;
+  const nodeIntId = parseInt(nodeId);
+  const selectedIntId = parseInt(props.selectedId);
+  return nodeIntId === selectedIntId || nodeId === props.selectedId;
+};
+
 const handleNodeClick = (node) => {
   emit('node-click', node);
 };
@@ -92,7 +102,7 @@ const handleNodeClick = (node) => {
         :key="node.id"
         class="tree-node"
       >
-        <div class="node-content" @click="toggleNode(node.id)" :class="{ 'node-selected': selectedId === node.id }">
+        <div class="node-content" @click="toggleNode(node.id)" :class="{ 'node-selected': isSelected(node.id) }">
           <span class="node-toggle" v-if="hasChildren(node)">
             {{ isExpanded(node.id) ? '▼' : '►' }}
           </span>

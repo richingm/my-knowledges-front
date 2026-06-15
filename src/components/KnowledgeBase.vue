@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch, onUnmounted, shallowRef } from 'vue';
+import { ref, onMounted, watch, onUnmounted, shallowRef, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue';
 import '@wangeditor/editor/dist/css/style.css';
@@ -21,9 +21,10 @@ const selectedKnowledge = ref(null);
 const selectedArticle = ref(null);
 const articleDetail = ref(null);
 const editableArticle = ref(null);
-const editorRef = shallowRef(null);
 const mode = ref('default');
 const viewMode = ref('tree');
+const knowledgeCollapsed = ref(false);
+const articleCollapsed = ref(false);
 
 const toolbarConfig = {
   excludeKeys: [
@@ -33,20 +34,88 @@ const toolbarConfig = {
   ]
 };
 
+const editorConfig = {
+  placeholder: '请输入文章内容...',
+  autoFocus: true,
+  MENU_CONF: {
+    uploadImage: {
+      server: '/api/v1/files/upload',
+      fieldName: 'file',
+      maxFileSize: 5 * 1024 * 1024,
+      maxNumberOfFiles: 5,
+      allowedFileTypes: ['image/*'],
+      timeout: 10 * 1000,
+
+      async customUpload(file, insertFn) {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        try {
+          const res = await fetch('/api/v1/files/upload', {
+            method: 'POST',
+            body: formData,
+            timeout: 10000
+          })
+
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`)
+          }
+
+          const result = await res.json()
+          console.log('upload result:', result)
+
+          if (result && result.Url) {
+            insertFn(result.Url)
+            showNotification('图片上传成功!', 'success')
+          } else if (result && result.url) {
+            insertFn(result.url)
+            showNotification('图片上传成功!', 'success')
+          } else {
+            throw new Error('上传接口返回格式不正确')
+          }
+        } catch (err) {
+          console.error('图片上传失败:', err)
+          showNotification(`图片上传失败: ${err.message}`, 'error')
+        }
+      },
+
+      onSuccess(file, res) {
+        console.log('upload success', res)
+      },
+
+      onFailed(file, res) {
+        console.error('upload failed', res)
+        showNotification('图片上传失败!', 'error')
+      },
+
+      onError(file, err) {
+        console.error('upload error:', err)
+        showNotification(`图片上传错误: ${err.message}`, 'error')
+      }
+    }
+  }
+};
+
+const editor = shallowRef(null);
+
+const handleCreated = (ed) => {
+  editor.value = ed;
+};
+
 const notification = ref({
   show: false,
   message: '',
   type: 'success'
 });
 
-const leftColumnCollapsed = ref(false);
-const middleColumnCollapsed = ref(false);
-
 const previewImage = ref({
   show: false,
   src: '',
   scale: 1
 });
+
+const leftColumnCollapsed = ref(false);
+const middleColumnCollapsed = ref(false);
 
 const showNotification = (message, type = 'success') => {
   notification.value = {
@@ -58,6 +127,7 @@ const showNotification = (message, type = 'success') => {
     notification.value.show = false;
   }, 3000);
 };
+
 
 const moveKnowledge = async (knowledgeId, newParentId) => {
   const result = await knowledgeService.moveKnowledge(knowledgeId, newParentId, selectedDomain.value?.id);
@@ -71,29 +141,31 @@ const moveKnowledge = async (knowledgeId, newParentId) => {
   }
 };
 
-const generateKnowledgeOptions = (nodes, level = 0) => {
+const generateKnowledgeOptions = (nodes, level = 0, excludeId = null) => {
   let options = [];
   const indent = '  '.repeat(level);
   nodes.forEach(node => {
-    options.push({
-      value: node.id,
-      label: `${indent}${node.name}`
-    });
-    if (node.children && node.children.length > 0) {
-      options = options.concat(generateKnowledgeOptions(node.children, level + 1));
+    if (node.id !== excludeId) {
+      options.push({
+        value: node.id,
+        label: `${indent}${node.name}`
+      });
+      if (node.children && node.children.length > 0) {
+        options = options.concat(generateKnowledgeOptions(node.children, level + 1, excludeId));
+      }
     }
   });
   return options;
 };
 
 const handleMoveKnowledge = (knowledgeId) => {
-  const knowledgeOptions = generateKnowledgeOptions(knowledgeTree.value);
+  const knowledgeOptions = generateKnowledgeOptions(knowledgeTree.value, 0, knowledgeId);
   const optionsHtml = knowledgeOptions.map(opt => 
     `<option value="${opt.value}">${opt.label}</option>`
   ).join('');
   
   const selectHtml = `
-    <select id="knowledgeMoveSelect" style="width: 200px; padding: 5px;">
+    <select id="knowledgeMoveSelect" style="width: 200px; padding: 5px; margin-bottom: 10px;">
       <option value="0">根目录</option>
       ${optionsHtml}
     </select>
@@ -103,10 +175,63 @@ const handleMoveKnowledge = (knowledgeId) => {
   container.innerHTML = selectHtml;
   const select = container.querySelector('select');
   
-  const confirmed = confirm('确定移动此知识库吗？');
-  if (confirmed) {
-    moveKnowledge(knowledgeId, parseInt(select.value) || 0);
-  }
+  container.style.position = 'fixed';
+  container.style.top = '50%';
+  container.style.left = '50%';
+  container.style.transform = 'translate(-50%, -50%)';
+  container.style.padding = '20px';
+  container.style.backgroundColor = 'white';
+  container.style.border = '1px solid #ccc';
+  container.style.borderRadius = '8px';
+  container.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  container.style.zIndex = '1000';
+  
+  const message = document.createElement('p');
+  message.textContent = '请选择目标位置:';
+  message.style.marginBottom = '10px';
+  container.insertBefore(message, select);
+  
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.display = 'flex';
+  buttonContainer.style.gap = '10px';
+  buttonContainer.style.marginTop = '15px';
+  
+  const confirmBtn = document.createElement('button');
+  confirmBtn.textContent = '确定';
+  confirmBtn.style.padding = '5px 15px';
+  confirmBtn.style.backgroundColor = '#007bff';
+  confirmBtn.style.color = 'white';
+  confirmBtn.style.border = 'none';
+  confirmBtn.style.borderRadius = '4px';
+  confirmBtn.style.cursor = 'pointer';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = '取消';
+  cancelBtn.style.padding = '5px 15px';
+  cancelBtn.style.backgroundColor = '#6c757d';
+  cancelBtn.style.color = 'white';
+  cancelBtn.style.border = 'none';
+  cancelBtn.style.borderRadius = '4px';
+  cancelBtn.style.cursor = 'pointer';
+  
+  buttonContainer.appendChild(confirmBtn);
+  buttonContainer.appendChild(cancelBtn);
+  container.appendChild(buttonContainer);
+  
+  const handleConfirm = () => {
+    const newParentId = parseInt(select.value) || 0;
+    moveKnowledge(knowledgeId, newParentId);
+    document.body.removeChild(container);
+  };
+  
+  const handleCancel = () => {
+    document.body.removeChild(container);
+  };
+  
+  confirmBtn.addEventListener('click', handleConfirm);
+  cancelBtn.addEventListener('click', handleCancel);
+  
+  document.body.appendChild(container);
 };
 
 const moveArticle = async (articleId, newParentId) => {
@@ -121,34 +246,114 @@ const moveArticle = async (articleId, newParentId) => {
   }
 };
 
-const generateArticleOptions = (nodes, level = 0) => {
+const generateArticleOptions = (nodes, level = 0, excludeId = null) => {
   let options = [];
-  const indent = '  '.repeat(level);
+  const indent = '\u00A0\u00A0'.repeat(level);
   nodes.forEach(node => {
-    options.push({
-      value: node.id,
-      label: `${indent}${node.title}`
-    });
-    if (node.children && node.children.length > 0) {
-      options = options.concat(generateArticleOptions(node.children, level + 1));
+    const nodeId = parseInt(node.id) || node.id;
+    const excludeIntId = excludeId !== null ? (parseInt(excludeId) || excludeId) : null;
+    
+    if (nodeId !== excludeIntId) {
+      options.push({
+        value: node.id,
+        label: `${indent}${node.title}`
+      });
+      if (node.children && node.children.length > 0) {
+        options = options.concat(generateArticleOptions(node.children, level + 1, excludeId));
+      }
     }
   });
   return options;
 };
 
 const handleMoveArticle = (articleId) => {
-  const articleOptions = generateArticleOptions(articleTree.value);
-  const confirmed = confirm('确定移动此文章到根目录吗？');
-  if (confirmed) {
-    moveArticle(articleId, 0);
+  if (!articleTree.value || articleTree.value.length === 0) {
+    showNotification('文章列表数据未加载!', 'error');
+    return;
   }
+  
+  const articleOptions = generateArticleOptions(articleTree.value, 0, articleId);
+  console.log('Article options generated:', articleOptions);
+  
+  const optionsHtml = articleOptions.map(opt => 
+    `<option value="${opt.value}">${opt.label}</option>`
+  ).join('');
+  
+  const selectHtml = `
+    <select id="articleMoveSelect" style="width: 200px; padding: 5px; margin-bottom: 10px;">
+      <option value="0">根目录</option>
+      ${optionsHtml}
+    </select>
+  `;
+  
+  const container = document.createElement('div');
+  container.innerHTML = selectHtml;
+  const select = container.querySelector('select');
+  
+  container.style.position = 'fixed';
+  container.style.top = '50%';
+  container.style.left = '50%';
+  container.style.transform = 'translate(-50%, -50%)';
+  container.style.padding = '20px';
+  container.style.backgroundColor = 'white';
+  container.style.border = '1px solid #ccc';
+  container.style.borderRadius = '8px';
+  container.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  container.style.zIndex = '1000';
+  
+  const message = document.createElement('p');
+  message.textContent = '请选择目标位置:';
+  message.style.marginBottom = '10px';
+  container.insertBefore(message, select);
+  
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.display = 'flex';
+  buttonContainer.style.gap = '10px';
+  buttonContainer.style.marginTop = '15px';
+  
+  const confirmBtn = document.createElement('button');
+  confirmBtn.textContent = '确定';
+  confirmBtn.style.padding = '5px 15px';
+  confirmBtn.style.backgroundColor = '#007bff';
+  confirmBtn.style.color = 'white';
+  confirmBtn.style.border = 'none';
+  confirmBtn.style.borderRadius = '4px';
+  confirmBtn.style.cursor = 'pointer';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = '取消';
+  cancelBtn.style.padding = '5px 15px';
+  cancelBtn.style.backgroundColor = '#6c757d';
+  cancelBtn.style.color = 'white';
+  cancelBtn.style.border = 'none';
+  cancelBtn.style.borderRadius = '4px';
+  cancelBtn.style.cursor = 'pointer';
+  
+  buttonContainer.appendChild(confirmBtn);
+  buttonContainer.appendChild(cancelBtn);
+  container.appendChild(buttonContainer);
+  
+  const handleConfirm = () => {
+    const newParentId = parseInt(select.value) || 0;
+    moveArticle(articleId, newParentId);
+    document.body.removeChild(container);
+  };
+  
+  const handleCancel = () => {
+    document.body.removeChild(container);
+  };
+  
+  confirmBtn.addEventListener('click', handleConfirm);
+  cancelBtn.addEventListener('click', handleCancel);
+  
+  document.body.appendChild(container);
 };
 
 const fetchDomains = async () => {
   try {
     const result = await domainService.listDomains();
-    if (result && result.items) {
-      domains.value = result.items;
+    if (result && Array.isArray(result)) {
+      domains.value = result;
     }
   } catch (error) {
     console.error('获取领域列表失败:', error);
@@ -158,7 +363,9 @@ const fetchDomains = async () => {
 const fetchKnowledgeTree = async (domainId) => {
   try {
     const result = await knowledgeService.getKnowledgeTree(domainId);
-    if (result && result.knowledge_tree) {
+    if (result && Array.isArray(result)) {
+      knowledgeTree.value = result;
+    } else if (result && result.knowledge_tree) {
       knowledgeTree.value = result.knowledge_tree;
     } else if (result && result.items) {
       knowledgeTree.value = result.items;
@@ -173,15 +380,20 @@ const fetchKnowledgeTree = async (domainId) => {
 const fetchArticleTree = async (knowledgeId) => {
   try {
     const result = await articleService.getArticleTree(knowledgeId);
-    if (result && result.article_tree) {
-      articleTree.value = result.article_tree;
+    let articles = [];
+    
+    if (result && Array.isArray(result)) {
+      articles = result;
+    } else if (result && result.article_tree) {
+      articles = result.article_tree;
     } else if (result && result.items) {
-      articleTree.value = result.items;
-    } else {
-      articleTree.value = [];
+      articles = result.items;
     }
+    
+    articleTree.value = articles;
   } catch (error) {
     console.error('获取文章树失败:', error);
+    articleTree.value = [];
   }
 };
 
@@ -209,7 +421,7 @@ const fetchArticle = async (articleId) => {
 
 const handleDomainChange = async (event) => {
   const domainId = parseInt(event.target.value);
-  const domain = domains.value.find(d => d.id === domainId);
+  const domain = domains.value.find(d => d.id && parseInt(d.id) === domainId);
   if (domain) {
     selectedDomain.value = domain;
     localStorage.setItem('selectedDomainId', domainId.toString());
@@ -271,15 +483,13 @@ const handleCreateKnowledge = async (parentId = null) => {
   const name = prompt('请输入知识库名称');
   if (!name) return;
   
-  const description = prompt('请输入知识库描述（可选）');
-  
   try {
-    const result = await knowledgeService.createKnowledge(
-      selectedDomain.value?.id,
-      parentId ? parseInt(parentId) : 0,
-      name,
-      description || ''
-    );
+    const result = await knowledgeService.createKnowledge({
+      domain_id: selectedDomain.value?.id,
+      parentKnowledgeId: parentId ? parseInt(parentId) : 0,
+      name: name,
+      description: ''
+    });
     
     if (result) {
       await fetchKnowledgeTree(selectedDomain.value?.id);
@@ -344,12 +554,12 @@ const handleCreateArticle = async (parentArticleId = null) => {
   if (!title) return;
   
   try {
-    const result = await articleService.createArticle(
-      selectedKnowledge.value.id,
-      title,
-      '',
-      parentArticleId ? parseInt(parentArticleId) : 0
-    );
+    const result = await articleService.createArticle({
+      knowledge_id: selectedKnowledge.value.id,
+      title: title,
+      content: '',
+      parent_article_id: parentArticleId ? parseInt(parentArticleId) : 0
+    });
     
     if (result && result.id) {
       await fetchArticleTree(selectedKnowledge.value.id);
@@ -389,15 +599,16 @@ const handleUpdateArticle = async () => {
   if (!editableArticle.value) return;
   
   try {
-    const editor = editorRef.value?.getEditor();
-    const content = editor ? editor.getHtml() : editableArticle.value.content;
+    const content = editor.value ? editor.value.getHtml() : editableArticle.value.content;
     
     const result = await articleService.updateArticle(
       editableArticle.value.id,
-      selectedKnowledge.value?.id,
-      editableArticle.value.title,
-      content,
-      editableArticle.value.importance
+      {
+        knowledge_id: selectedKnowledge.value?.id,
+        title: editableArticle.value.title,
+        content: content,
+        importance: editableArticle.value.importance
+      }
     );
     
     if (result) {
@@ -600,10 +811,23 @@ onUnmounted(() => {
     
     <main class="main">
       <div v-if="viewMode === 'tree'" class="three-column-layout">
+        <button 
+          v-if="leftColumnCollapsed" 
+          @click="leftColumnCollapsed = false" 
+          class="expand-btn column-1-expand" 
+          title="展开知识库"
+        >
+          ▶ 知识库
+        </button>
         <div v-if="!leftColumnCollapsed" class="column column-1">
           <div class="column-header">
             <h2>知识库</h2>
-            <button @click="handleCreateKnowledge()" class="create-btn">+ 新建</button>
+            <div class="column-actions">
+              <button @click="leftColumnCollapsed = true" class="collapse-btn" title="收缩">
+                ◀
+              </button>
+              <button @click="handleCreateKnowledge()" class="create-btn">+ 新建</button>
+            </div>
           </div>
           <KnowledgeTree 
             :tree-data="knowledgeTree" 
@@ -616,10 +840,23 @@ onUnmounted(() => {
           />
         </div>
         
+        <button 
+          v-if="middleColumnCollapsed" 
+          @click="middleColumnCollapsed = false" 
+          class="expand-btn column-2-expand" 
+          title="展开文章"
+        >
+          ▶ 文章
+        </button>
         <div v-if="!middleColumnCollapsed" class="column column-2">
           <div class="column-header">
             <h2>文章</h2>
-            <button @click="handleCreateArticle()" class="create-btn" :disabled="!selectedKnowledge">+ 新建</button>
+            <div class="column-actions">
+              <button @click="middleColumnCollapsed = true" class="collapse-btn" title="收缩">
+                ◀
+              </button>
+              <button @click="handleCreateArticle()" class="create-btn" :disabled="!selectedKnowledge">+ 新建</button>
+            </div>
           </div>
           <ArticleTree 
             :tree-data="articleTree" 
@@ -667,11 +904,11 @@ onUnmounted(() => {
             <div class="article-content">
               <div v-if="mode === 'view'" v-html="articleDetail.content" class="content-view"></div>
               <div v-else class="editor-wrapper">
-                <Toolbar :editor="editorRef" :config="toolbarConfig" />
+                <Toolbar :editor="editor" :defaultConfig="toolbarConfig" />
                 <Editor 
                   v-model="editableArticle.content" 
-                  :editor="editorRef"
-                  :config="{ placeholder: '请输入文章内容...' }"
+                  :defaultConfig="editorConfig"
+                  @onCreated="handleCreated"
                 />
               </div>
             </div>
@@ -897,6 +1134,60 @@ onUnmounted(() => {
 .create-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.column-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.collapse-btn {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #dc3545;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  background-color: white;
+  color: #dc3545;
+  transition: all 0.2s;
+}
+
+.collapse-btn:hover {
+  background-color: #dc3545;
+  color: white;
+}
+
+.expand-btn {
+  padding: 0.5rem;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  background-color: white;
+  color: #007bff;
+  transition: all 0.2s;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.expand-btn:hover {
+  background-color: #007bff;
+  color: white;
+}
+
+.column-1-expand {
+  position: absolute;
+  left: 0;
+  top: 1rem;
+  writing-mode: horizontal-tb;
+}
+
+.column-2-expand {
+  position: absolute;
+  left: 4px;
+  top: 1rem;
+  writing-mode: horizontal-tb;
 }
 
 .article-detail {

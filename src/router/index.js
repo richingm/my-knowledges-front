@@ -12,13 +12,17 @@ const routes = [
   },
   {
     path: '/',
-    name: 'home',
+    redirect: '/knowledges'
+  },
+  {
+    path: '/knowledges',
+    name: 'knowledges',
     component: KnowledgeBase,
     meta: { requiresAuth: true }
   },
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/'
+    redirect: '/knowledges'
   }
 ];
 

@@ -91,7 +91,7 @@ export const articleService = {
         },
         body: JSON.stringify({
           id: parseInt(articleId),
-          new_parent_id: newParentId ? parseInt(newParentId) : 0,
+          newParentId: newParentId ? parseInt(newParentId) : 0,
           knowledge_id: parseInt(knowledgeId)
         })
       });

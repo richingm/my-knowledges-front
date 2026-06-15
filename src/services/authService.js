@@ -1,12 +1,12 @@
 export const authService = {
-  async login(email, password) {
+  async login(username, password) {
     try {
-      const response = await fetch('/api/v1/auth/login', {
+      const response = await fetch('/api/v1/users/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ username, password })
       });
       
       if (!response.ok) {
@@ -16,18 +16,14 @@ export const authService = {
       
       const data = await response.json();
       
-      // 保存token到localStorage（支持驼峰和下划线两种命名）
-      const accessToken = data.accessToken || data.access_token;
-      const refreshToken = data.refreshToken || data.refresh_token;
+      // 保存token到localStorage（后端返回的是token字段）
+      const accessToken = data.token || data.accessToken || data.access_token;
       
       if (accessToken) {
         localStorage.setItem('access_token', accessToken);
       }
-      if (refreshToken) {
-        localStorage.setItem('refresh_token', refreshToken);
-      }
       
-      // 保存用户信息到localStorage，避免依赖 /api/v1/auth/me 接口
+      // 保存用户信息到localStorage
       const user = data.user || data;
       if (user) {
         localStorage.setItem('current_user', JSON.stringify(user));
@@ -40,37 +36,15 @@ export const authService = {
     }
   },
   
-  async logout() {
-    try {
-      const response = await fetch('/api/v1/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        }
-      });
-      
-      // 无论成功与否，都清除本地存储
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('current_user');
-      localStorage.removeItem('selectedDomain');
-      localStorage.removeItem('selectedKnowledgeId');
-      localStorage.removeItem('selectedArticleId');
-      
-      if (!response.ok) {
-        throw new Error('退出失败');
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('退出失败:', error);
-      // 即使请求失败，也要清除本地存储
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('current_user');
-      return true;
-    }
+  logout() {
+    // 直接清空token，不需要调用后端接口
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('current_user');
+    localStorage.removeItem('selectedDomain');
+    localStorage.removeItem('selectedKnowledgeId');
+    localStorage.removeItem('selectedArticleId');
+    return true;
   },
   
   async getCurrentUser() {
